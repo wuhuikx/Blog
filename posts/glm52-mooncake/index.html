@@ -180,7 +180,13 @@ html[lang="zh-CN"] .banner-title[data-lang="zh"]{display:inline}
 
 <!-- neurospark-futurework:start --><p><strong>RoCE congestion control across nodes.</strong> Many-to-one and one-to-many RDMA traffic (prefill-to-decode KV transfer and Store restores across servers) needs working congestion control, ECN/DCQCN or PFC, so that bandwidth is shared evenly across GPUs. We are fixing this on our multi-node fabric and will measure the AgentX sweep again with it in place.</p><!-- neurospark-futurework:end -->
 <h2 id="en-acknowledgments">Acknowledgments</h2>
-<p>We thank the Mooncake community for Mooncake Store and Transfer Engine and for working with us on this deployment, SemiAnalysis for AgentX and InferenceX, and AMD's ATOM, AITER, FlyDSL, and ROCm teams for the serving engine, kernels, and software this work builds on. ATOM's Mooncake Store connector (<a href="https://github.com/ROCm/ATOM/pull/2464" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2464</a>) and its prefill-to-decode transfer path (<a href="https://github.com/ROCm/ATOM/pull/2431" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2431</a>) are open source.</p>
+<p>We thank the Mooncake community for Mooncake Store and Transfer Engine and for working with us on this deployment, SemiAnalysis for AgentX and InferenceX, and AMD's ATOM, AITER, FlyDSL, and ROCm teams for the serving engine, kernels, and software this work builds on. In particular, we are grateful to:</p>
+<ul>
+<li>AMD: Yajie Zhang, Hattie Wu, Lingpeng Jin, Carlus Huang, Yuechao Guo, Honglie Yi, Peng Sun, Emad Barsoum</li>
+<li>NeuroSpark AI: Runzhe Hao, Calvin Fei, Ivan Shan, Thomas Ning</li>
+<li>Mooncake: TBD</li>
+</ul>
+<p>ATOM's Mooncake Store connector (<a href="https://github.com/ROCm/ATOM/pull/2464" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2464</a>) and its prefill-to-decode transfer path (<a href="https://github.com/ROCm/ATOM/pull/2431" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2431</a>) are open source.</p>
 <h2 id="en-related-links">Related Links</h2>
 <ul>
 <li>ATOM: https://github.com/ROCm/ATOM</li>
@@ -430,7 +436,13 @@ html[lang="zh-CN"] .banner-title[data-lang="zh"]{display:inline}
 
 <!-- neurospark-futurework:start --><p><strong>多节点 RoCE 拥塞控制</strong>。多对一和一对多的 RDMA 流量（跨服务器的 Prefill 到 Decode KV 传输，以及从 Store 恢复 KV）需要生效的拥塞控制（ECN/DCQCN 或 PFC），带宽才能在各张卡之间均匀分配。我们正在多节点网络上修复这一点，修复后会重新测量 AgentX。</p><!-- neurospark-futurework:end -->
 <h2 id="zh-acknowledgments">致谢</h2>
-<p>感谢 Mooncake 社区提供 Mooncake Store 与 Transfer Engine，并与我们一起推进这套部署；感谢 SemiAnalysis 提供 AgentX 和 InferenceX；感谢 AMD ATOM、AITER、FlyDSL 与 ROCm 团队提供这项工作所依赖的推理引擎、算子和软件栈。ATOM 的 Mooncake Store 连接器（<a href="https://github.com/ROCm/ATOM/pull/2464" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2464</a>）和 Prefill 到 Decode 的传输通路（<a href="https://github.com/ROCm/ATOM/pull/2431" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2431</a>）均已开源。</p>
+<p>感谢 Mooncake 社区提供 Mooncake Store 与 Transfer Engine，并与我们一起推进这套部署；感谢 SemiAnalysis 提供 AgentX 和 InferenceX；感谢 AMD ATOM、AITER、FlyDSL 与 ROCm 团队提供这项工作所依赖的推理引擎、算子和软件栈。特别感谢：</p>
+<ul>
+<li>AMD：Yajie Zhang、Hattie Wu、Lingpeng Jin、Carlus Huang、Yuechao Guo、Honglie Yi、Peng Sun、Emad Barsoum</li>
+<li>NeuroSpark AI：Runzhe Hao、Calvin Fei、Ivan Shan、Thomas Ning</li>
+<li>Mooncake：待补充</li>
+</ul>
+<p>ATOM 的 Mooncake Store 连接器（<a href="https://github.com/ROCm/ATOM/pull/2464" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2464</a>）和 Prefill 到 Decode 的传输通路（<a href="https://github.com/ROCm/ATOM/pull/2431" target="_blank" rel="noopener noreferrer">ROCm/ATOM#2431</a>）均已开源。</p>
 <h2 id="zh-related-links">相关链接</h2>
 <ul>
 <li>ATOM：<a href="https://github.com/ROCm/ATOM" target="_blank" rel="noopener noreferrer">https://github.com/ROCm/ATOM</a></li>

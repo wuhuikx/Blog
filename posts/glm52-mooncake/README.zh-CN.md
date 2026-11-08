@@ -152,7 +152,13 @@ NeuroSpark 用 ATOM 和 Mooncake 在四台 8 卡 AMD Instinct MI350X 服务器�
 
 ## 致谢
 
-感谢 Mooncake 社区提供 Mooncake Store 与 Transfer Engine，并与我们一起推进这套部署；感谢 SemiAnalysis 提供 AgentX 和 InferenceX；感谢 AMD ATOM、AITER、FlyDSL 与 ROCm 团队提供这项工作所依赖的推理引擎、算子和软件栈。ATOM 的 Mooncake Store 连接器（[ROCm/ATOM#2464](https://github.com/ROCm/ATOM/pull/2464)）和 Prefill 到 Decode 的传输通路（[ROCm/ATOM#2431](https://github.com/ROCm/ATOM/pull/2431)）均已开源。
+感谢 Mooncake 社区提供 Mooncake Store 与 Transfer Engine，并与我们一起推进这套部署；感谢 SemiAnalysis 提供 AgentX 和 InferenceX；感谢 AMD ATOM、AITER、FlyDSL 与 ROCm 团队提供这项工作所依赖的推理引擎、算子和软件栈。特别感谢：
+
+- AMD：Yajie Zhang、Hattie Wu、Lingpeng Jin、Carlus Huang、Yuechao Guo、Honglie Yi、Peng Sun、Emad Barsoum
+- NeuroSpark AI：Runzhe Hao、Calvin Fei、Ivan Shan、Thomas Ning
+- Mooncake：待补充
+
+ATOM 的 Mooncake Store 连接器（[ROCm/ATOM#2464](https://github.com/ROCm/ATOM/pull/2464)）和 Prefill 到 Decode 的传输通路（[ROCm/ATOM#2431](https://github.com/ROCm/ATOM/pull/2431)）均已开源。
 
 ## 相关链接
 
