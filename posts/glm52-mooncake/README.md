@@ -6,7 +6,7 @@
 
 A coding agent rarely asks a new question. It sends the same long conversation back with a little more at the end. As agentic coding becomes everyday work, serving it means long sessions that pause for tools and come back expecting the server to still hold their history. SemiAnalysis now measures this workload with [InferenceX AgentX](https://github.com/SemiAnalysisAI/agentx-harness).
 
-We serve it with prefill and decode on separate GPUs, which keeps long prefills from stalling the agents that are generating. The split has a side effect that is easy to miss: it splits the server's host memory in two as well, and the half next to decode sits nearly idle. **Mooncake Store pools both halves back into one KV pool.** With it, ATOM serves around a hundred concurrent GLM-5.2 agent sessions on one 8-GPU AMD Instinct MI355X server at about 44K tokens/s per GPU, and reuses more than 95% of every prompt.
+We serve it with prefill and decode on separate GPUs, which keeps long prefills from stalling the agents that are generating. The split has a side effect that is easy to miss: it splits the server's host memory in two as well, and the half next to decode sits nearly idle. **Mooncake Store pools both halves back into one KV pool.** With it, ATOM serves around a hundred concurrent agent sessions on one 8-GPU AMD Instinct MI355X server at about 44K tokens/s per GPU, and reuses more than 95% of every prompt.
 
 ## One Agent Session, Up Close
 
@@ -20,7 +20,7 @@ Three things in this picture decide how the server must treat KV.
 
 **The history is almost all reused.** Each request resends the same conversation with a little added at the end. Across the trace, the median request carries 142K input tokens, and with a perfect prefix cache only **1.7K** of them need prefill. Whether a turn computes 1.7K tokens or 142K depends on one thing: whether the server still holds the history as KV. Some turns no cache can save: after the long pause in Figure 1, most of the next prompt is new (hatched).
 
-**The history is heavy.** GLM-5.2 with an FP8 KV cache stores 48,672 bytes per token, so a 100K-token conversation takes about 5 GB.
+**The history is heavy.** GLM-5.3 with an FP8 KV cache stores 48,672 bytes per token, so a 100K-token conversation takes about 5 GB.
 
 **The history spends most of its life waiting.** The amber and light-green blocks in the top panel are time when the main thread has no request running, because a tool, the user or its subagents are working. During the 182-second wait marked in Figure 1, 7.2 GB of KV has nothing to do, but the next turn needs all of it. When the four subagents run, each builds its own context, and the session's live KV jumps to 26 GB. The server therefore has to hold the history of every live session, not only of the requests running right now.
 
@@ -92,7 +92,7 @@ The trade is GPU work and memory for far fewer network operations. Gather and sc
 
 <center><p>Figure 6. Throughput per GPU, and where each prompt token came from, at 56 to 112 concurrent sessions.</p></center>
 
-We ran InferenceX AgentX against this deployment for an hour at each load, from 56 to 112 concurrent agent sessions, in [one InferenceX sweep](https://github.com/SemiAnalysisAI/InferenceX/pull/4045). GLM-5.2 runs with MXFP4 weights, an FP8 KV cache and multi-token prediction, with the draft acceptance length pinned to the value InferenceX prescribes. Throughput per GPU counts every prompt token, cached or not, plus generated tokens, divided by all eight GPUs.
+We ran InferenceX AgentX against this deployment for an hour at each load, from 56 to 112 concurrent agent sessions, in [one InferenceX sweep](https://github.com/SemiAnalysisAI/InferenceX/pull/4045). The sweep measured GLM-5.2, which has the same architecture and KV size per token as GLM-5.3. It runs with MXFP4 weights, an FP8 KV cache and multi-token prediction, with the draft acceptance length pinned to the value InferenceX prescribes. Throughput per GPU counts every prompt token, cached or not, plus generated tokens, divided by all eight GPUs.
 
 **Throughput.** Throughput per GPU rises from about 31K tokens/s at 56 sessions to about **44K** at 96 and 112 sessions, where the median generation speed per user is about 46 tokens/s.
 
