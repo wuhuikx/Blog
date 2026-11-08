@@ -154,7 +154,7 @@ ATOM with Mooncake now keeps agent history within reach on one server, but there
 
 We thank the Mooncake community for Mooncake Store and Transfer Engine and for working with us on this deployment, SemiAnalysis for AgentX and InferenceX, and AMD's ATOM, AITER, FlyDSL, and ROCm teams for the serving engine, kernels, and software this work builds on. In particular, we are grateful to:
 
-- AMD: Yajie Zhang, Hattie Wu, Lingpeng Jin, Carlus Huang, Yuechao Guo, Honglie Yi, Peng Sun, Emad Barsoum
+- AMD: Yajie Zhang, Hattie Wu, Lingpeng Jin, Carlus Huang, Yuechao Guo, Honglie Yi, Lirong Zhang, Peng Sun, Emad Barsoum
 - NeuroSpark AI: Runzhe Hao, Calvin Fei, Ivan Shan, Thomas Ning
 - Mooncake: TBD
 
