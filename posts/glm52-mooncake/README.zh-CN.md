@@ -6,7 +6,7 @@
 
 编程 Agent 很少提新问题，而是把同一段长对话反复发回来，只在末尾添上几句。随着 Agent 编程成为日常工作，推理服务面对的是一场场很长的会话：Agent 停下来调用工具，回来时希望服务端还留着它的对话历史。SemiAnalysis 现在用 [InferenceX AgentX](https://github.com/SemiAnalysisAI/agentx-harness) 衡量的正是这类负载。
 
-我们把 Prefill 和 Decode 放在不同的 GPU 上，让长 Prefill 不再拖慢正在生成的 Agent。这样做有一个容易被忽略的副作用：主机内存也随之被切成两半，Decode 那一半几乎闲置。**Mooncake Store 把两半内存重新汇成一个 KV 池。** 有了它，ATOM 在一台 8 卡 AMD Instinct MI355X 服务器上同时承载约一百个 GLM-5.2 Agent 会话，单卡吞吐约 44K tokens/s，每个 prompt 95% 以上来自复用。
+我们把 Prefill 和 Decode 放在不同的 GPU 上，让长 Prefill 不再拖慢正在生成的 Agent。这样做有一个容易被忽略的副作用：主机内存也随之被切成两半，Decode 那一半几乎闲置。**Mooncake Store 把两半内存重新汇成一个 KV 池。** 有了它，ATOM 在一台 8 卡 AMD Instinct MI355X 服务器上同时承载约一百个 Agent 会话，单卡吞吐约 44K tokens/s，每个 prompt 95% 以上来自复用。
 
 ## 近看一个 Agent 会话
 
@@ -20,7 +20,7 @@ AgentX 把录制好的 Claude Code 会话回放到真实的服务上。图 1 跟
 
 **历史几乎全部可复用。** 每个请求都把同一段对话重发一遍，只在末尾添一点。全语料中，请求输入的中位数是 142K token，若前缀缓存完美，只有 **1.7K** 需要 Prefill。一轮调用是算 1.7K 还是算 142K，只取决于一件事：服务端是否还以 KV 的形式留着这段历史。有些轮次任何缓存都救不了：图 1 中长暂停之后，下一个 prompt 大部分是新的（斜线部分）。
 
-**历史很重。** GLM-5.2 用 FP8 存 KV 时每个 token 占 48,672 字节，十万 token 的对话约 5 GB。
+**历史很重。** GLM-5.3 用 FP8 存 KV 时每个 token 占 48,672 字节，十万 token 的对话约 5 GB。
 
 **历史大部分时间在等待。** 上半图中的浅黄和浅绿色块，是主线程没有请求在跑、在等工具、用户或子 Agent 的时间。图 1 中标出的那次 182 秒等待里，7.2 GB 的 KV 无事可做，但下一轮需要它的全部。四个子 Agent 同时运行时，各自积累自己的上下文，这个会话持有的 KV 一下涨到 26 GB。所以服务端要留住的是每个存活会话的历史，而不只是此刻正在跑的请求。
 
@@ -92,7 +92,7 @@ ATOM 的做法是先在 Prefill GPU 上把发往每张 Decode GPU 的 KV 聚合�
 
 <center><p>图 6：56 到 112 个并发会话下的单卡吞吐，以及每个 prompt token 的来源。</p></center>
 
-我们在[同一轮 InferenceX sweep](https://github.com/SemiAnalysisAI/InferenceX/pull/4045) 中用 InferenceX AgentX 测试了这套部署，并发 Agent 会话数从 56 到 112，每个负载点跑一小时。GLM-5.2 使用 MXFP4 权重、FP8 KV cache，并开启多 token 预测（MTP），MTP 的平均接受长度按 InferenceX 的规定固定为统一值。单卡吞吐的口径是所有 prompt token（不论是否命中缓存）与生成 token 之和，均摊到全部八张 GPU 上。
+我们在[同一轮 InferenceX sweep](https://github.com/SemiAnalysisAI/InferenceX/pull/4045) 中用 InferenceX AgentX 测试了这套部署，并发 Agent 会话数从 56 到 112，每个负载点跑一小时。这轮 sweep 测的是 GLM-5.2，它与 GLM-5.3 结构相同，每个 token 的 KV 大小也一样。模型使用 MXFP4 权重、FP8 KV cache，并开启多 token 预测（MTP），MTP 的平均接受长度按 InferenceX 的规定固定为统一值。单卡吞吐的口径是所有 prompt token（不论是否命中缓存）与生成 token 之和，均摊到全部八张 GPU 上。
 
 **吞吐。** 单卡吞吐从 56 个会话时的约 31K tokens/s 升到 96 和 112 个会话时的约 **44K**，此时用户生成速度的中位数约为 46 tokens/s。
 
