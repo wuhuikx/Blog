@@ -104,6 +104,38 @@ ATOM 的做法是先在 Prefill GPU 上把发往每张 Decode GPU 的 KV 聚合�
 
 **到哪里为止。** 96 个会话以内，首 token 时延的中位数不超过 2.5 秒。到 112 个会话，单卡吞吐仍保持在约 44K，但服务器已没有余量：Decode 的 KV 显存占用中位数达到 **91%**，请求开始在 Prefill 前排队，首 token 时延的中位数升到约 7 秒。
 
+<!-- neurospark-section:start -->
+## 扩展到四台服务器：GLM-5.3 在 MI350X 上的 6P2D 部署（NeuroSpark）
+
+NeuroSpark 用 ATOM 和 Mooncake 在四台 8 卡 AMD Instinct MI350X 服务器上服务 GLM-5.3（MXFP4 权重、FP8 KV cache）。我们在这套部署上加入了 Mooncake Store，做了两组实验，都比较分池和混池：一组用回放的生产流量，另一组用和上文相同的 AgentX 测试，Prefill 和 Decode 的并行方式也与上文相同。
+
+**部署形态。** 32 张卡运行 6 个 Prefill 实例和 2 个 Decode 实例（6P2D），分成两组，每组 3 个 Prefill 加 1 个 Decode，前面是 KV 准入网关。每个 Decode 实例用 TP4 加 Decode 上下文并行（DCP4），通过上文介绍的聚合、大块写入、落地分发路径接收 KV。AgentX 测试中，每个 Prefill 实例与单机部署一样用 PP4，Store 里每个 token 只存一份。生产流量的对比运行在我们已上线的 recipe 上，其 Prefill 实例用 TP4：在生产负载下 TP4 Prefill 不是瓶颈，且分池、混池两组都用 TP4，对比只反映池化本身的差别。
+
+**KV 池。** 每块网卡也承担引擎的流量，所以 Store 与引擎共用网卡。我们按 RoCE rail 分池（4 个 Mooncake Master），每个 Prefill 实例的同号 rank 读写同一个池。包括 Decode 所在的服务器在内，每台服务器提供 8 个 96 GiB 的 Store 服务：每台 768 GiB，合计约 3 TiB。只有 Prefill 实例读写这个池。
+
+### 生产负载下的分池与混池
+
+<center><img src="./images/glm53-1rps-split-vs-shared.zh.png" alt="每秒 0.6、0.8、1.0 个请求时分池与混池的首 token 时延和 prompt token 来源" style="width:100%; max-width:1100px"/></center>
+
+<center><p>图 7：每秒 0.6、0.8 和 1.0 个请求时，分池与混池的首 token 时延（p50 和 p90）和每个 prompt token 的来源（热轮次）。</p></center>
+
+我们的 GLM-5.3 流量平均约每秒 0.8 个请求，所以我们以每秒 0.6、0.8 和 1.0 个请求回放由生产流量重建的编程 Agent 会话，每组 20 分钟，请求按生产方式设置（输出最多 32K token，开启推理）。两组使用同一套部署，每台服务器同样提供 768 GiB 的 Store 内存，唯一的区别是是否共享：**分池**时，每台服务器的内存只服务本机的 Prefill 实例；**混池**时，四台服务器的内存组成一个池，所有 Prefill 实例共同读写。每条回放 lane 从会话中途开始，所以第一轮在两组里都是冷 Prefill；统计只覆盖之后的轮次。
+
+**共享才是 KV 池真正起作用的原因。** 混池时，各负载下 Mooncake Store 都提供 **58%** 的 prompt token，KV cache 复用率 **95%–96%**：Prefill 只需实际计算 4%–5% 的 prompt token，首 token 时延的中位数约 1.0 秒，p90 为 1.7–1.8 秒。分池时，Store 只提供约 11%，复用率降到 51%–55%：网关和路由把同一个会话的各轮请求分散到四台服务器上的 6 个 Prefill 实例，下一轮请求通常落在一台没有这段会话历史的服务器上。于是 Prefill 要实际计算约一半的 prompt，首 token 时延的 p90 升到 7–10 秒。
+
+### 32 卡上的 AgentX
+
+<center><img src="./images/glm53-6p2d-agentx-results.zh.png" alt="四台 MI350X 服务器在 56 到 112 个并发会话下分池与混池的系统总吞吐、首 token 时延（p50 和 p90）和 prompt token 来源" style="width:100%; max-width:1100px"/></center>
+
+<center><p>图 8：PP4 Prefill 加 DCP4 Decode，56 到 112 个并发会话下，分池与混池的系统总吞吐（全部 32 张卡）、首 token 时延（p50 和 p90）和每个 prompt token 的来源。</p></center>
+
+我们使用与上文相同的工具和 trace（InferenceX AgentX，`cc-traces-weka-062126`），每个负载点测 15 分钟。峰值上下文超过我们 917,504 token 输入上限的 trace 被跳过（393 条中的 10 条），输出长度固定为 trace 记录的长度。我们报告整个系统的吞吐：所有 prompt token（不论是否命中缓存）与生成 token 之和，按全部 32 张卡每秒计。
+
+**吞吐与复用。** 系统总吞吐从 56 个会话时的 **256K tokens/s** 升到 96 个会话时的 **389K**，112 个会话时保持在约 350K；首 token 时延的中位数约 1.0 秒（0.96–1.05 秒），p90 不超过 2.3 秒。各负载下 KV cache 复用率都保持在 **94%–95%**（trace 理论上限约 97%）。与图 6 一样，显存留不住的部分由 Mooncake Store 补上：56 个会话时 Prefill 显存提供 70% 的 prompt token，96 和 112 个会话时降到 54%，Store 的比例则从 26% 升到 **40%–41%**。
+
+**高并发下分池跟不上。** 我们在同一套部署上把 Store 改成分池（每台服务器的 Store 只服务本机的 Prefill 实例），重复了这组测试。系统总吞吐停在 156K–194K tokens/s，混池则是 256K–389K：56 个会话时混池快 1.6 倍，96 和 112 个会话时约快 2 倍。分池时 Store 只提供 12%–15% 的 prompt token，KV cache 复用率随会话数增加从 79% 降到 65%，Prefill 要实际计算 21%–35% 的 prompt token，而混池只需 4%–6%。首 token 时延的 p90 从 3.9 秒升到 19.3 秒，混池则保持在 1.9–2.3 秒。
+<!-- neurospark-section:end -->
+
 ## 下一步
 
 借助 Mooncake，ATOM 已经能在一台服务器上留住 Agent 的历史，但仍有继续推进的空间。
@@ -113,6 +145,10 @@ ATOM 的做法是先在 Prefill GPU 上把发往每张 Decode GPU 的 KV 聚合�
 **增加 SSD 层**。有些 Agent 会话一停就是好几分钟甚至更久。[Mooncake 的 SSD offloading](https://kvcache.ai/blog/scaling-kv-cache-beyond-memory/) 能以远低于内存的成本保留它们的历史。
 
 **给 Decode 腾出空间**。Decode 把每个运行中请求的 KV 都放在显存里，最高负载时已接近占满。下一步是给每个 Prefill 实例配更多 Decode GPU，并让每张 Decode GPU 放下更多 KV。
+
+<!-- neurospark-futurework:start -->
+**多节点 RoCE 拥塞控制**。多对一和一对多的 RDMA 流量（跨服务器的 Prefill 到 Decode KV 传输，以及从 Store 恢复 KV）需要生效的拥塞控制（ECN/DCQCN 或 PFC），带宽才能在各张卡之间均匀分配。我们正在多节点网络上修复这一点，修复后会重新测量 AgentX。
+<!-- neurospark-futurework:end -->
 
 ## 致谢
 
@@ -125,3 +161,53 @@ ATOM 的做法是先在 Prefill GPU 上把发往每张 Decode GPU 的 KV 聚合�
 - AgentX 基准：<https://github.com/SemiAnalysisAI/agentx-harness>
 - AgentX trace 语料：<https://huggingface.co/datasets/semianalysisai/cc-traces-weka-062126>
 - 这套部署的 InferenceX 结果：<https://github.com/SemiAnalysisAI/InferenceX/pull/4045>
+
+<!-- neurospark-appendix:start -->
+## 附录：测试环境与可复现性（四机 GLM-5.3）
+
+本附录覆盖 NeuroSpark 一节中四机 GLM-5.3 的测量（图 7 和图 8）。
+
+**硬件与系统**（除注明外四台服务器相同）
+
+| 项目 | 值 |
+|---|---|
+| 服务器 | 4 台，每台 8 张 AMD Instinct MI350X（gfx950，288 GB HBM3E），VBIOS 00165723 |
+| CPU、内存 | 2 颗 AMD EPYC 9755（2 个 NUMA 节点），1,511 GiB |
+| 操作系统、内核 | Ubuntu 22.04.5 LTS，6.8.0-138-generic；`iommu=pt`，`numa_balancing=0`，THP 为 `madvise`，未预留大页 |
+| GPU 驱动、固件 | amdgpu 6.16.13；GPU 固件 CP_MEC 41、RLC 43、SDMA 12、VCN 09.10.B0.09 |
+| 主机工具 | AMD SMI 26.5.0，主机 ROCm 7.14.0（其中一台 7.14.1；容器内不使用），Docker 29.8.0（其中一台 29.1.3） |
+| RDMA 网卡 | 8 块 Broadcom BCM957608-P1400GDF00（400 Gb/s RoCE v2，MTU 9000），每张 GPU 一块；固件 237.1.148.0（其中一台为 230.2.49.0）；bnxt_en / bnxt_re 237.1.137.0 |
+| 拓扑 | 每张 GPU 使用最近的网卡；slot 0 的 GPU 0–3 与 slot 1 的 GPU 5、4、7、6 对应同样四条 rail，所以每个引擎的 rank *i* 在同一条 rail 上。 |
+
+**软件**
+
+| 项目 | 值 |
+|---|---|
+| 容器镜像 | `rocm/atom-dev:nightly_202610231448-rocm10.0`，`sha256:082403b0dab5ef607d826f431ab636d2c146114d105b5e83b3961a3eadfcfb75`（所有引擎、Store、路由、网关和压测客户端） |
+| ATOM | commit `573e9c7de8e3462f24cdc6242970263493e3612b`（0.1.9.dev16） |
+| Mooncake Store / Transfer Engine | 0.3.13（git `78566d45`），Master、Store 服务二进制和 Python wheel 来自同一构建 |
+| AITER | 0.1.27.dev117（`amd-aiter 0.1.27.dev117+g1e2d557d7`），commit `1e2d557d7877f880e7daf3ac8d5cc45f918f6d9e` |
+| ROCm、HIP | ROCm 10.0.0（镜像内），HIP 7.15.26333 |
+| PyTorch、Triton | PyTorch 2.11.0+rocm10.0.0（git `c9ab2693`），Triton 3.8.0（git `4cff872c`） |
+| Python、Transformers | Python 3.12.3，Transformers 5.16.1 |
+| 路由 | atomesh 0.2.0 |
+| 模型 | `amd/GLM-5.3-Quark-MXFP4-AttnFP8`，revision `4992911b6f4e4d20947573ac7e04ff7d18b32288`（78 层） |
+| 测试工具 | AgentX harness 1.0.7，数据集 `semianalysisai/cc-traces-weka-062126` revision `23f152f6f0f9399a85901b89a6458def0ef16729`。未直接使用 InferenceX |
+
+**配置**
+
+| 项目 | 值 |
+|---|---|
+| 摆放 | 6P2D，分成两组（每组 3 个 Prefill 加 1 个 Decode）；Prefill 不放在本组 Decode 所在的服务器；每个引擎占一个 NUMA 节点的 4 张 GPU |
+| Prefill（图 8） | TP1 × PP4，层切分 20/20/20/18，eager，单批最多 8,192 token |
+| Prefill（图 7） | TP4，完整 CUDA graph，单批最多 16,384 token |
+| Decode（两组相同） | TP4 + DCP4，完整 CUDA graph；开启 ATOM 的聚合 / 落地传输 |
+| 通用引擎设置 | FP8 KV cache，block 16，最大长度 1,048,576，最多 256 个序列，显存利用率 0.85，开启前缀缓存，不开 MTP |
+| KV 传输 | Mooncake Transfer Engine，RDMA，每个端点一个 QP，每个 rank 绑定最近的网卡 |
+| Mooncake Store | 按 rail 分池（4 个 Master；占用 90% 时按 LRU 淘汰，每次 5%）；每台服务器 8 个 96 GiB 的 Store 服务，清缓存和内存整理后用透明大页；每个 Store 服务放在下一条 rail 的网卡上。混池：所有 Prefill 实例使用同样 4 个 Master。分池（图 7 和图 8）：每台服务器运行自己的 4 个 Master，只供本机 Prefill 使用 |
+| 路由、网关 | 每组一个路由（感知 Decode，Prefill 之间用 `power_of_two`）；一个 KV 准入网关：每个 Decode 实例 1,000 万 token × 0.9，输入最多 917,504、输出最多 131,072 token，准入等待 30 秒（回放）或 900 秒（AgentX，其 warm-up 会同时启动所有会话） |
+| AgentX 设置 | `agentx profile`，并发 56 / 72 / 96 / 112，每个负载 900 秒，每条 lane 3 个 warm-up 请求，`ignore_eos` 加 trace 记录的输出长度，关闭推理，`--max-context-length 917504` |
+| 回放设置 | 160 条 lane，泊松到达 0.6 / 0.8 / 1.0 RPS，每组 20 分钟，`max_tokens` 32,000，开启推理，seed 7 |
+| 网络 | 所有优先级 PFC 关闭，ECN/CNP 计数为 0，网卡未配置拥塞控制（有损 RoCE） |
+| 启动文件 | HW_Optimization 的 recipe `disagg_mxfp4_atom_mooncake`（commit `91a8f996`），加两处实验改动（`start.sh` 中的 Prefill 流水线并行与 Store 环境变量透传、网关接受 `ignore_eos`）以及我们的启动脚本；可按需提供 |
+<!-- neurospark-appendix:end -->
