@@ -154,9 +154,11 @@ NeuroSpark 生产环境的 GLM-5.3 流量平均约每秒 0.8 个请求，所以�
 
 感谢 Mooncake 社区提供 Mooncake Store 与 Transfer Engine，并与我们一起推进这套部署；感谢 SemiAnalysis 提供 AgentX 和 InferenceX；感谢 AMD ATOM、AITER、FlyDSL 与 ROCm 团队提供这项工作所依赖的推理引擎、算子和软件栈。特别感谢：
 
-- AMD：Yajie Zhang、Hattie Wu、Lingpeng Jin、Carlus Huang、Yuechao Guo、Honglie Yi、Lirong Zhang、Peng Sun、Emad Barsoum
+- AMD：Yajie Zhang、Hattie Wu、Lingpeng Jin、Carlus Huang、Yuechao Guo、Honglie Yi、Lirong Zhang、Peng Sun、Emad Barsoum、Anatolii Rozanov\*、Andy Luo\*
 - NeuroSpark AI：Runzhe Hao、Calvin Fei、Ivan Shan、Thomas Ning
-- Mooncake：待补充
+- Mooncake：Lzy17、Feng Ren、staryxchen、Wenjie Xu、Teng Ma、Ke Yang
+
+\* Anatolii Rozanov 和 Andy Luo 同时也是 Mooncake 的 maintainer。
 
 ATOM 的 Mooncake Store 连接器（[ROCm/ATOM#2464](https://github.com/ROCm/ATOM/pull/2464)）和 Prefill 到 Decode 的传输通路（[ROCm/ATOM#2431](https://github.com/ROCm/ATOM/pull/2431)）均已开源。
 
